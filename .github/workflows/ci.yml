@@ -47,3 +47,4 @@ jobs:
 
       - name: Verify Admin Panel Dockerfile
         run: docker build -t peopledoxx-admin ./admin-panel
+
