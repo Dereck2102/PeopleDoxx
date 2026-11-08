@@ -1,0 +1,81 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: peopledoxx-backend-dev
+    env_file: .env.dev
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql+asyncpg://peopledoxx:peopledoxx@postgres:5432/peopledoxx
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - peopledoxx-dev-net
+
+  frontend:
+    image: node:20-alpine
+    container_name: peopledoxx-frontend-dev
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - NEXT_PUBLIC_API_KEY=dev-key-change-in-production
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - peopledoxx-dev-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: peopledoxx-redis-dev
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - peopledoxx-dev-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: peopledoxx-postgres-dev
+    environment:
+      POSTGRES_USER: peopledoxx
+      POSTGRES_PASSWORD: peopledoxx
+      POSTGRES_DB: peopledoxx
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U peopledoxx"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - peopledoxx-dev-net
+
+volumes:
+  postgres-dev-data:
+
+networks:
+  peopledoxx-dev-net:
+    driver: bridge
+

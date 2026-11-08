@@ -1,0 +1,107 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: peopledoxx-backend
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql+asyncpg://peopledoxx:peopledoxx@postgres:5432/peopledoxx
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - peopledoxx-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: peopledoxx-frontend
+    env_file: .env
+    environment:
+      - NEXT_PUBLIC_API_KEY=${API_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - peopledoxx-net
+
+  admin-panel:
+    build:
+      context: ./admin-panel
+      dockerfile: Dockerfile
+    container_name: peopledoxx-admin
+    env_file: .env
+    ports:
+      - "4000:4000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - peopledoxx-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: peopledoxx-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+      - admin-panel
+    restart: unless-stopped
+    networks:
+      - peopledoxx-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: peopledoxx-redis
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - peopledoxx-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: peopledoxx-postgres
+    environment:
+      POSTGRES_USER: peopledoxx
+      POSTGRES_PASSWORD: peopledoxx
+      POSTGRES_DB: peopledoxx
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U peopledoxx"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - peopledoxx-net
+
+volumes:
+  redis-data:
+  postgres-data:
+
+networks:
+  peopledoxx-net:
+    driver: bridge
+
